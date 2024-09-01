@@ -1,0 +1,205 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: customer-config
+  namespace: garage
+data:
+  DB_USER: dev_user
+  DB_PASSWORD: dev123456789
+  DB_NAME: dev_db
+  CI_DB_USERNAME: test_user
+  CI_DB_PASSWORD: test123456789
+  CI_DB_NAME: test_db
+  PROD_DB_USERNAME: prod_user
+  PROD_DB_PASSWORD: prod123456789
+  PROD_DB_NAME: prod_db
+  PROD_DB_PORT: "3306"
+  MESSAGE_BUS_USERNAME: guest
+  MESSAGE_BUS_PASSWORD: guest
+  MESSAGE_BUS: rabbitmq
+  MYSQL_ROOT_PASSWORD: root123456789
+  MESSAGE_BUS_TIMEOUT: "5000"
+  DB_HOST: pitstop-customer-database
+  SERVICE_NAME: PitstopCustomerService
+  PORT: "3001"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vehicle-config
+  namespace: garage
+data:
+  DB_USER: dev_user
+  DB_PASSWORD: dev123456789
+  DB_NAME: dev_db
+  CI_DB_USERNAME: test_user
+  CI_DB_PASSWORD: test123456789
+  CI_DB_NAME: test_db
+  PROD_DB_USERNAME: prod_user
+  PROD_DB_PASSWORD: prod123456789
+  PROD_DB_NAME: prod_db
+  PROD_DB_PORT: "3306"
+  MESSAGE_BUS_USERNAME: guest
+  MESSAGE_BUS_PASSWORD: guest
+  MESSAGE_BUS: rabbitmq
+  MESSAGE_BUS_TIMEOUT: "5000"
+  DB_HOST: pitstop-vehicle-database
+  SERVICE_NAME: PitstopVehicleService
+  PORT: "3002"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workshop-config
+  namespace: garage
+data:
+  DB_USER: dev_user
+  DB_PASSWORD: dev123456789
+  DB_NAME: dev_db
+  CI_DB_USERNAME: test_user
+  CI_DB_PASSWORD: test123456789
+  CI_DB_NAME: test_db
+  PROD_DB_USERNAME: prod_user
+  PROD_DB_PASSWORD: prod123456789
+  PROD_DB_NAME: prod_db
+  PROD_DB_PORT: "3306"
+  MESSAGE_BUS_USERNAME: guest
+  MESSAGE_BUS_PASSWORD: guest
+  MESSAGE_BUS: rabbitmq
+  MESSAGE_BUS_TIMEOUT: "5000"
+  DB_HOST: pitstop-workshop-database
+  SERVICE_NAME: PitstopWorkshopService
+  PORT: "3003"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-deployment
+  namespace: garage
+spec:
+  selector:
+    matchLabels:
+      app: customer
+  template:
+    metadata:
+      labels:
+        app: customer
+    spec:
+      containers:
+      - name: pitstop-customer-service
+        image: sbihielahbib/pitstop-customer:20
+        ports:
+        - containerPort: 3001
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+        envFrom:
+          - configMapRef:
+              name: customer-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitstop-customer-service
+  namespace: garage
+spec:
+  selector:
+    app: customer
+  ports:
+  - protocol: TCP  # Corrected from "protocole"
+    port: 3001
+    targetPort: 3001
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vehicle-deployment
+  namespace: garage
+spec:
+  selector:
+    matchLabels:
+      app: vehicle
+  template:
+    metadata:
+      labels:
+        app: vehicle
+    spec:
+      containers:
+      - name: pitstop-vehicle-service
+        image: sbihielahbib/pitstop-vehicle:2
+        ports:
+        - containerPort: 3002
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+        envFrom:
+        - configMapRef:
+              name: vehicle-config
+        
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitstop-vehicle-service
+  namespace: garage
+spec:
+  selector:
+    app: vehicle
+  ports:
+  - protocol: TCP  
+    port: 3002
+    targetPort: 3002
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workshop-deployment
+  namespace: garage
+spec:
+  selector:
+    matchLabels:
+      app: workshop
+  template:
+    metadata:
+      labels:
+        app: workshop
+    spec:
+      containers:
+      - name: pitstop-workshop-service
+        image: sbihielahbib/pitstop-workshop:2
+        ports:
+        - containerPort: 3003
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+        envFrom:
+          - configMapRef:
+              name: workshop-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitstop-workshop-service
+  namespace: garage
+spec:
+  selector:
+    app: workshop
+  ports:
+  - protocol: TCP  # Corrected from "protocole"
+    port: 3003
+    targetPort: 3003

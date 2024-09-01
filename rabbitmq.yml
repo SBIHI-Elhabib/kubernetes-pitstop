@@ -1,0 +1,163 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: garage
+data:
+
+  enabled_plugins: |
+    [rabbitmq_management, rabbitmq_peer_discovery_k8s,rabbitmq_prometheus].
+
+  rabbitmq.conf: |
+      cluster_formation.peer_discovery_backend = k8s
+      cluster_formation.k8s.host = kubernetes.default.svc.cluster.local
+      cluster_formation.k8s.address_type = hostname
+      cluster_formation.k8s.service_name = rabbitmq-service
+      queue_master_locator=min-masters
+      loopback_users.guest = false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rabbitmq
+  namespace: garage
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: rabbitmq
+  namespace: garage
+rules:
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: rabbitmq
+  namespace: garage
+subjects:
+- kind: ServiceAccount
+  name: rabbitmq
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rabbitmq
+
+---
+apiVersion: apps/v1
+# See the Prerequisites section of https://www.rabbitmq.com/cluster-formation.html#peer-discovery-k8s.
+kind: StatefulSet
+metadata:
+  name: rabbitmq-statfulset
+  namespace: garage
+spec:
+  serviceName: rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      serviceAccountName: rabbitmq
+        # Use Linux nodes in a mixed OS kubernetes cluster.
+        # Learn more at https://kubernetes.io/docs/reference/kubernetes-api/labels-annotations-taints/#kubernetes-io-os
+      containers:
+      - name: rabbitmq-k8s
+        image: rabbitmq:3.8
+        volumeMounts:
+          - name: config-volume
+            mountPath: /etc/rabbitmq
+        # Learn more about what ports various protocols use
+        # at https://www.rabbitmq.com/networking.html#ports
+        ports:
+          - name: http
+            protocol: TCP
+            containerPort: 15672
+          - name: amqp
+            protocol: TCP
+            containerPort: 5672
+        livenessProbe:
+          exec:
+            # This is just an example. There is no "one true health check" but rather
+            # several rabbitmq-diagnostics commands that can be combined to form increasingly comprehensive
+            # and intrusive health checks.
+            # Learn more at https://www.rabbitmq.com/monitoring.html#health-checks.
+            #
+            # Stage 2 check:
+            command: ["rabbitmq-diagnostics", "status"]
+          initialDelaySeconds: 60
+          # See https://www.rabbitmq.com/monitoring.html for monitoring frequency recommendations.
+          periodSeconds: 60
+          timeoutSeconds: 15
+        readinessProbe:
+          exec:
+            # This is just an example. There is no "one true health check" but rather
+            # several rabbitmq-diagnostics commands that can be combined to form increasingly comprehensive
+            # and intrusive health checks.
+            # Learn more at https://www.rabbitmq.com/monitoring.html#health-checks.
+            #
+            # Stage 1 check:
+            command: ["rabbitmq-diagnostics", "ping"]
+          initialDelaySeconds: 20
+          periodSeconds: 60
+          timeoutSeconds: 10
+        imagePullPolicy: Always
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.name
+          - name: MY_POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: RABBITMQ_USE_LONGNAME
+            value: "true"
+          # See a note on cluster_formation.k8s.address_type in the config file section
+          - name: K8S_SERVICE_NAME
+            value: rabbitmq
+          - name: RABBITMQ_NODENAME
+            value: rabbit@$(MY_POD_NAME).$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
+          - name: K8S_HOSTNAME_SUFFIX
+            value: .$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
+      volumes:
+        - name: config-volume
+          configMap:
+            name: rabbitmq-config
+            items:
+            - key: rabbitmq.conf
+              path: rabbitmq.conf
+            - key: enabled_plugins
+              path: enabled_plugins
+---
+kind: Service
+apiVersion: v1
+metadata:
+  namespace: garage
+  name: rabbitmq-service
+  labels:
+    app: rabbitmq
+spec:
+  type: NodePort
+  ports:
+   - name: http
+     protocol: TCP
+     port: 15672
+     targetPort: 15672
+     nodePort: 31672
+   - name: amqp
+     protocol: TCP
+     port: 5672
+     targetPort: 5672
+     nodePort: 30672
+  selector:
+    app: rabbitmq

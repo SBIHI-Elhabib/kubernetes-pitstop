@@ -1,0 +1,241 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: initdb-configmap-customer
+  namespace: garage
+data:
+  initdb.sql: |
+    CREATE DATABASE IF NOT EXISTS dev_db;
+    CREATE USER dev_user IDENTIFIED BY 'dev123456789';
+    GRANT ALL PRIVILEGES ON dev_db.* TO dev_user;
+    CREATE DATABASE IF NOT EXISTS prod_db;
+    CREATE USER prod_user IDENTIFIED BY 'prod123456789';
+    GRANT ALL PRIVILEGES ON prod_db.* TO prod_user;
+    CREATE DATABASE IF NOT EXISTS test_db;
+    CREATE USER test_user IDENTIFIED BY 'test123456789';
+    GRANT ALL PRIVILEGES ON test_db.* TO test_user;
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: initdb-configmap-vehicle
+  namespace: garage
+data:
+  initdb.sql: |
+    CREATE DATABASE IF NOT EXISTS dev_db;
+    CREATE USER dev_user IDENTIFIED BY 'dev123456789';
+    GRANT ALL PRIVILEGES ON dev_db.* TO dev_user;
+    CREATE DATABASE IF NOT EXISTS prod_db;
+    CREATE USER prod_user IDENTIFIED BY 'prod123456789';
+    GRANT ALL PRIVILEGES ON prod_db.* TO prod_user;
+    CREATE DATABASE IF NOT EXISTS test_db;
+    CREATE USER test_user IDENTIFIED BY 'test123456789';
+    GRANT ALL PRIVILEGES ON test_db.* TO test_user;
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: initdb-configmap-workshop
+  namespace: garage
+data:
+  initdb.sql: |
+    CREATE DATABASE IF NOT EXISTS dev_db;
+    CREATE USER dev_user IDENTIFIED BY 'dev123456789';
+    GRANT ALL PRIVILEGES ON dev_db.* TO dev_user;
+    CREATE DATABASE IF NOT EXISTS prod_db;
+    CREATE USER prod_user IDENTIFIED BY 'prod123456789';
+    GRANT ALL PRIVILEGES ON prod_db.* TO prod_user;
+    CREATE DATABASE IF NOT EXISTS test_db;
+    CREATE USER test_user IDENTIFIED BY 'test123456789';
+    GRANT ALL PRIVILEGES ON test_db.* TO test_user;
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysqldb-secret
+  namespace: garage
+type: Opaque
+data:
+  MYSQL_ROOT_PASSWORD: cm9vdDEyMzQ1Njc4OQ==
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: customer-database-statefulset
+  namespace: garage
+spec:
+  selector:
+    matchLabels:
+      app: customer-database
+  serviceName: pitstop-customer-database
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: customer-database
+    spec:
+      containers:
+      - name: pitstop-customer-database
+        image: mysql:latest
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-initdb
+          mountPath: /docker-entrypoint-initdb.d
+        - name: customer-persistent-storage
+          mountPath: /var/lib/mysql
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysqldb-secret
+                key: MYSQL_ROOT_PASSWORD
+      volumes:   # <--- Moved volumes under spec.template.spec
+        - name: mysql-initdb
+          configMap:
+            name: initdb-configmap-customer
+  volumeClaimTemplates:
+  - metadata:
+      name: customer-persistent-storage
+      namespace: garage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitstop-customer-database
+  namespace: garage
+spec:
+  selector:
+    app: customer-database
+  ports:
+  - port: 3306
+    targetPort: 3306
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vehicle-database-statefulset
+  namespace: garage
+spec:
+  selector:
+    matchLabels:
+      app: vehicle-database
+  serviceName: pitstop-vehicle-database
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: vehicle-database
+    spec:
+      containers:
+      - name: pitstop-vehicle-database
+        image: mysql:latest
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-initdb
+          mountPath: /docker-entrypoint-initdb.d
+        - name: vehicle-persistent-storage
+          mountPath: /var/lib/mysql
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysqldb-secret
+                key: MYSQL_ROOT_PASSWORD
+      volumes:   # <--- Moved volumes under spec.template.spec
+        - name: mysql-initdb
+          configMap:
+            name: initdb-configmap-vehicle
+  volumeClaimTemplates:
+  - metadata:
+      name: vehicle-persistent-storage
+      namespace: garage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitstop-vehicle-database
+  namespace: garage
+spec:
+  selector:
+    app: vehicle-database
+  ports:
+  - port: 3306
+    targetPort: 3306
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: workshop-database-statefulset
+  namespace: garage
+spec:
+  selector:
+    matchLabels:
+      app: workshop-database
+  serviceName: pitstop-workshop-database
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: workshop-database
+    spec:
+      containers:
+      - name: pitstop-workshop-database
+        image: mysql:latest
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-initdb
+          mountPath: /docker-entrypoint-initdb.d
+        - name: workshop-persistent-storage
+          mountPath: /var/lib/mysql
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysqldb-secret
+                key: MYSQL_ROOT_PASSWORD
+      volumes:   # <--- Moved volumes under spec.template.spec
+        - name: mysql-initdb
+          configMap:
+            name: initdb-configmap-workshop
+  volumeClaimTemplates:
+  - metadata:
+      name: workshop-persistent-storage
+      namespace: garage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitstop-workshop-database
+  namespace: garage
+spec:
+  selector:
+    app: workshop-database
+  ports:
+  - port: 3306
+    targetPort: 3306
